@@ -9,13 +9,17 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
-      - key: BOT_TOKEN
+      - key: BOT_TOKEN        # токен бота от @BotFather
         sync: false
-      - key: ADMIN_CHAT_ID
+      - key: ADMIN_CHAT_ID    # ID админа
+        sync: false
+      - key: MANAGER_ID       # ID менеджера
+        sync: false
+      - key: DATABASE_URL     # Internal Database URL из Render PostgreSQL
         sync: false
       - key: CHANNEL_URL
-        sync: false
+        value: https://t.me/shmot_dro
       - key: REVIEWS_URL
-        sync: false
-      - key: SUPPORT_URL
+        value: https://t.me/R_M_STYDIA
+      - key: SUPPORT_URL      # ссылка на менеджера, например https://t.me/username
         sync: false
