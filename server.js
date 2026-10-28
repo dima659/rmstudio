@@ -207,7 +207,7 @@ async function apiRoute(req, res, p) {
     if (!photo && text.length < 3) return json(res, 400, { error: 'Добавьте фото или описание' });
     const r = { id: ++db.seq, uid: u.id, text, size: String(b.size || '').slice(0, 20), kind: String(b.kind || '').slice(0, 20), hasPhoto: !!photo, status: 'new', created: Date.now() };
     db.requests.push(r); save();
-    notifyAdmin(`🆕 <b>Заявка №${r.id}</b>\nОт: ${who(u)}\nРазмер: ${h(r.size || '—')}\nОписание: ${h(text || '—')}\n\n/status ${r.id} searching|found|done|cancelled\n/reply ${r.id} текст`, photo);
+    notifyAdmin(`🆕 <b>Заявка №${r.id}</b>\nОт: ${who(u)}\nРазмер: ${h(r.size || '—')}\nОписание: ${h(text || '—')}`, photo);
     return json(res, 200, { request: r });
   }
   if (p === '/api/orders') {
@@ -226,7 +226,7 @@ async function apiRoute(req, res, p) {
     const o = { id: ++db.seq, uid: u.id, items, status: 'new', created: Date.now() };
     items.forEach(x => { const f = db.items.find(i => i.id === x.id); f.hidden = true; f.orderId = o.id; }); // скрыть из каталога, не удаляя
     db.orders.push(o); save();
-    notifyAdmin(`🛒 <b>Заказ №${o.id}</b>\nОт: ${who(u)}\n` + items.map(i => `• ${h(i.brand)} ${h(i.name)} ${h(i.size)} ${h(i.color)}`).join('\n') + `\n\n/status ${o.id} searching|found|done|cancelled`);
+    notifyAdmin(`🛒 <b>Заказ №${o.id}</b>\nОт: ${who(u)}\n` + items.map(i => `• ${h(i.brand)} ${h(i.name)} ${h(i.size)} ${h(i.color)}`).join('\n'));
     return json(res, 200, { order: o });
   }
   return json(res, 404, { error: 'Not found' });
