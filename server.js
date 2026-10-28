@@ -22,7 +22,7 @@ const STATUS = { new: 'Новая', searching: 'В поиске', found: 'Най
 const DATA_DIR = env.DATA_DIR || path.join(__dirname, 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'db.json');
-let db = { seq: 1000, users: {}, requests: [], orders: [] };
+let db = { seq: 1000, users: {}, requests: [], orders: [], items: null, images: {}, iseq: 0 };
 let pool = null, timer;
 function persist() {
   const data = JSON.stringify(db);
@@ -30,7 +30,7 @@ function persist() {
   else fs.writeFile(DB_FILE, data, () => {});
 }
 const save = () => { clearTimeout(timer); timer = setTimeout(persist, 300); };
-async function initDb() {
+async function initDb0() {
   if (DATABASE_URL) {
     try {
       const { Pool } = require('pg');
@@ -45,6 +45,19 @@ async function initDb() {
   }
   try { db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8'))); } catch (e) {}
   console.log('База данных: файл');
+}
+async function initDb() {
+  await initDb0();
+  if (!db.items) { // первый запуск: каталог берётся из catalog.json и дальше живёт в базе
+    db.items = JSON.parse(JSON.stringify(catalog.items));
+    db.iseq = Math.max(0, ...db.items.map(i => i.id));
+    save();
+  }
+}
+function pubCatalog(all) {
+  const items = db.items.filter(i => all || !i.hidden).map(i => Object.assign({}, i, { image: db.images[i.id] ? `/img/${i.id}?v=${i.iv || 0}` : (i.image || '') }));
+  const cats = [...new Set([...catalog.categories, ...items.map(i => i.category)])].filter(c => items.some(i => i.category === c));
+  return { currency: catalog.currency, brands: catalog.brands, categories: cats, items };
 }
 process.on('SIGTERM', () => { persist(); setTimeout(() => process.exit(0), 800); });
 
@@ -114,7 +127,10 @@ const findItem = id => db.requests.find(x => x.id === id) || db.orders.find(x =>
 async function setStatus(id, st) {
   const it = findItem(id);
   if (!it || !STATUS[st]) return false;
-  it.status = st; save();
+  it.status = st;
+  if (st === 'cancelled' && db.orders.includes(it)) // заказ отменён: вещи возвращаются в каталог
+    it.items.forEach(x => { const f = db.items.find(i => i.id === x.id); if (f && f.orderId === it.id) { f.hidden = false; delete f.orderId; } });
+  save();
   await tg('sendMessage', { chat_id: it.uid, text: `Статус №${id}: ${STATUS[st]}` });
   return true;
 }
@@ -127,7 +143,7 @@ async function replyTo(id, text) {
 
 // ---------- API ----------
 async function apiRoute(req, res, p) {
-  if (p === '/api/catalog') return json(res, 200, catalog);
+  if (p === '/api/catalog') return json(res, 200, pubCatalog(false));
   if (p === '/api/config') return json(res, 200, { channelUrl: env.CHANNEL_URL || 'https://t.me/shmot_dro', reviewsUrl: env.REVIEWS_URL || 'https://t.me/R_M_STYDIA', supportUrl: env.SUPPORT_URL || '' });
   const u = auth(req);
   if (!u) return json(res, 401, { error: 'Откройте приложение из Telegram' });
@@ -145,15 +161,40 @@ async function apiRoute(req, res, p) {
     if (p === '/api/admin/list' && req.method === 'GET') {
       const nm = id => { const x = db.users[id] || {}; return ((x.first_name || '') + (x.username ? ' @' + x.username : '')).trim() || 'id ' + id; };
       const dec = a => a.slice(-100).reverse().map(x => Object.assign({}, x, { client: nm(x.uid) }));
-      return json(res, 200, { requests: dec(db.requests), orders: dec(db.orders), stats: {
+      return json(res, 200, { catalog: pubCatalog(true).items, requests: dec(db.requests), orders: dec(db.orders), stats: {
         newRequests: db.requests.filter(x => x.status === 'new').length,
         newOrders: db.orders.filter(x => x.status === 'new').length,
         users: Object.keys(db.users).length } });
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-    const b = await readJson(req, 1e5);
+    const b = await readJson(req, p === '/api/admin/item' ? 3e6 : 1e5);
     if (p === '/api/admin/status') return (await setStatus(+b.id, String(b.status))) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Не найдено' });
     if (p === '/api/admin/reply') return (await replyTo(+b.id, String(b.text || '').trim().slice(0, 1000))) ? json(res, 200, { ok: true }) : json(res, 404, { error: 'Не найдено' });
+    if (p === '/api/admin/item') {
+      const clean = v => String(v == null ? '' : v).trim();
+      const brand = clean(b.brand).slice(0, 40), name = clean(b.name).slice(0, 80), category = clean(b.category).slice(0, 30);
+      if (!brand || !name || !category) return json(res, 400, { error: 'Заполните бренд, название и категорию' });
+      const list = v => [...new Set((Array.isArray(v) ? v : []).map(x => clean(x).slice(0, 20)).filter(Boolean))].slice(0, 20);
+      let it = +b.id ? db.items.find(i => i.id === +b.id) : null;
+      if (+b.id && !it) return json(res, 404, { error: 'Не найдено' });
+      if (!it) { it = { id: ++db.iseq, hidden: false, image: '' }; db.items.push(it); }
+      Object.assign(it, { brand, name, category, price: Number(b.price) > 0 ? Math.round(Number(b.price)) : null, colors: list(b.colors), sizes: list(b.sizes) });
+      if (typeof b.photo === 'string' && /^data:image\/(jpeg|png|webp);base64,/.test(b.photo) && b.photo.length < 2.8e6) { db.images[it.id] = b.photo; it.iv = Date.now(); it.image = ''; }
+      else if (b.removePhoto) { delete db.images[it.id]; it.image = ''; it.iv = Date.now(); }
+      save(); return json(res, 200, { id: it.id });
+    }
+    if (p === '/api/admin/item/hide') {
+      const it = db.items.find(i => i.id === +b.id);
+      if (!it) return json(res, 404, { error: 'Не найдено' });
+      it.hidden = !!b.hidden; if (!it.hidden) delete it.orderId;
+      save(); return json(res, 200, { ok: true });
+    }
+    if (p === '/api/admin/item/delete') {
+      const n = db.items.findIndex(i => i.id === +b.id);
+      if (n < 0) return json(res, 404, { error: 'Не найдено' });
+      delete db.images[db.items[n].id]; db.items.splice(n, 1);
+      save(); return json(res, 200, { ok: true });
+    }
     return json(res, 404, { error: 'Not found' });
   }
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
@@ -171,15 +212,19 @@ async function apiRoute(req, res, p) {
   }
   if (p === '/api/orders') {
     const b = await readJson(req, 1e5);
-    const items = (Array.isArray(b.items) ? b.items : []).slice(0, 30).map(x => {
-      const it = catalog.items.find(i => i.id === x.id);
-      if (!it) return null;
+    const items = []; let gone = false, bad = false;
+    for (const x of (Array.isArray(b.items) ? b.items : []).slice(0, 30)) {
+      const it = db.items.find(i => i.id === x.id);
+      if (!it || it.hidden) { gone = true; continue; }
+      if (items.some(y => y.id === it.id)) continue;
       const size = String(x.size || '');
-      if (it.sizes.length && !it.sizes.includes(size)) return null;
-      return { id: it.id, brand: it.brand, name: it.name, size, color: String(x.color || '').slice(0, 30) };
-    });
-    if (!items.length || items.includes(null)) return json(res, 400, { error: 'Проверьте размеры в корзине' });
+      if (it.sizes.length && !it.sizes.includes(size)) { bad = true; continue; }
+      items.push({ id: it.id, brand: it.brand, name: it.name, size, color: String(x.color || '').slice(0, 30) });
+    }
+    if (gone) return json(res, 409, { error: 'Некоторые вещи уже заказаны. Корзина обновлена' });
+    if (bad || !items.length) return json(res, 400, { error: 'Проверьте размеры в корзине' });
     const o = { id: ++db.seq, uid: u.id, items, status: 'new', created: Date.now() };
+    items.forEach(x => { const f = db.items.find(i => i.id === x.id); f.hidden = true; f.orderId = o.id; }); // скрыть из каталога, не удаляя
     db.orders.push(o); save();
     notifyAdmin(`🛒 <b>Заказ №${o.id}</b>\nОт: ${who(u)}\n` + items.map(i => `• ${h(i.brand)} ${h(i.name)} ${h(i.size)} ${h(i.color)}`).join('\n') + `\n\n/status ${o.id} searching|found|done|cancelled`);
     return json(res, 200, { order: o });
@@ -229,6 +274,12 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200); res.end('ok');
       onUpdate(up).catch(e => console.error('update', e));
       return;
+    }
+    if (p.startsWith('/img/')) {
+      const m = /^data:(image\/[a-z]+);base64,(.+)$/.exec(db.images[p.slice(5)] || '');
+      if (!m) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'content-type': m[1], 'cache-control': 'public, max-age=31536000, immutable' });
+      return res.end(Buffer.from(m[2], 'base64'));
     }
     if (p.startsWith('/api/')) return await apiRoute(req, res, p);
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); }
