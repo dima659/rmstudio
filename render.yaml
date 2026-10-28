@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: rmstudio-miniapp
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        sync: false
+      - key: CHANNEL_URL
+        sync: false
+      - key: REVIEWS_URL
+        sync: false
+      - key: SUPPORT_URL
+        sync: false

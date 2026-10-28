@@ -1,0 +1,15 @@
+{
+  "currency": "₽",
+  "brands": ["RMSTUDIO", "NIKE", "ADIDAS", "SUPREME", "NEW BALANCE", "VANS", "OFF-WHITE", "STONE ISLAND", "THE NORTH FACE", "CARHARTT"],
+  "categories": ["Куртки", "Худи", "Штаны", "Обувь", "Сумки"],
+  "items": [
+    { "id": 1, "brand": "Nike", "name": "Air Force 1 Low", "category": "Обувь", "price": null, "image": "", "colors": ["Белый", "Чёрный"], "sizes": ["39","40","41","42","43","44","45","46"] },
+    { "id": 2, "brand": "Supreme", "name": "Box Logo Hoodie", "category": "Худи", "price": null, "image": "", "colors": ["Серый", "Чёрный"], "sizes": ["XS","S","M","L","XL","XXL"] },
+    { "id": 3, "brand": "Adidas", "name": "Samba OG", "category": "Обувь", "price": null, "image": "", "colors": ["Белый", "Чёрный"], "sizes": ["39","40","41","42","43","44","45","46"] },
+    { "id": 4, "brand": "Carhartt WIP", "name": "Detroit Jacket", "category": "Куртки", "price": null, "image": "", "colors": ["Коричневый", "Чёрный"], "sizes": ["S","M","L","XL","XXL"] },
+    { "id": 5, "brand": "New Balance", "name": "550", "category": "Обувь", "price": null, "image": "", "colors": ["Белый", "Серый"], "sizes": ["39","40","41","42","43","44","45","46"] },
+    { "id": 6, "brand": "Stone Island", "name": "Cargo Pants", "category": "Штаны", "price": null, "image": "", "colors": ["Хаки", "Чёрный"], "sizes": ["S","M","L","XL","XXL"] },
+    { "id": 7, "brand": "The North Face", "name": "Nuptse Jacket", "category": "Куртки", "price": null, "image": "", "colors": ["Чёрный"], "sizes": ["S","M","L","XL","XXL"] },
+    { "id": 8, "brand": "Off-White", "name": "Shoulder Bag", "category": "Сумки", "price": null, "image": "", "colors": ["Чёрный"], "sizes": [] }
+  ]
+}

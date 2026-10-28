@@ -1,0 +1,8 @@
+{
+  "name": "rmstudio-miniapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram Mini App: каталог и поиск вещей по фото или описанию",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js" }
+}
